@@ -1,3 +1,4 @@
 target/
 deploy/charts/
-deploy/Chart.lock
+
+# Chart.lock IS committed: it pins the exact library chart digest a deploy resolves to.
