@@ -15,6 +15,7 @@ the value returned by the live service must be the tag that was just released.
 ```
 src/…  Dockerfile                 rootless UBI runtime, works under the restricted-v2 SCC
 .github/workflows/build.yaml      build → ghcr.io/ndc-dxc/istat-ndc-sample-service:<sha>
+.github/workflows/release-prod.yaml  renders the production release artifact
 deploy/                           its own deployment configuration
   Chart.yaml                        depends on the istat-ndc-service library chart
   values.yaml                       shared base
@@ -36,3 +37,24 @@ helm upgrade --install sample-service deploy/ \
 
 The build workflow can also ask the pipeline to do it automatically, by POSTing a signed
 payload to the listener when `DEPLOY_WEBHOOK_URL` is configured for the repository.
+
+## Promotion to production
+
+We deploy to dev and test. Production runs on a **different cluster**, and promoting to it is
+the ISTAT DevOps team's decision and responsibility — this repository holds no credentials for
+it (`istat-ndc-cicd/docs/cross-cluster.md`).
+
+What we hand them is a release artifact, not instructions:
+
+```sh
+gh workflow run release-prod.yaml -f revision=<sha validated in test> -f version=v1.2.3
+```
+
+It resolves the **digest** of that build, renders the manifests for both colours, and attaches
+them to a GitHub release together with a promotion record. The digest matters because their
+cluster may pull from a mirrored registry, where the same tag is a different lookup — the digest
+is the artifact itself, so "what went to production is what test validated" becomes checkable
+rather than assumed.
+
+`deploy/values-prod.yaml` describes production but is applied by them, so it requires a review
+from their team: see `.github/CODEOWNERS` and `istat-ndc-cicd/docs/repo-governance.md`.

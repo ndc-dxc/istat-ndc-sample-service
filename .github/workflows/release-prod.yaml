@@ -1,0 +1,119 @@
+name: release-prod
+
+# Prepares a production release for the ISTAT DevOps team.
+#
+# We do not deploy to production and we hold no credentials for that cluster: it is a separate
+# cluster, and promotion is their responsibility (istat-ndc-cicd/docs/cross-cluster.md). What
+# we owe them is not a procedure to run but an artifact to apply: the rendered manifests, plus
+# a promotion record that says exactly which bytes were validated in test.
+#
+# Trigger it with the commit that test validated:
+#   gh workflow run release-prod.yaml -f revision=<sha> -f version=v1.2.3
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: The commit whose image was validated in test
+        required: true
+      version:
+        description: Release name (e.g. v1.2.3)
+        required: true
+
+permissions:
+  contents: write
+  packages: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  SERVICE: sample-service
+  CHARTS_REPO: ndc-dxc/istat-ndc-helm-charts
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision }}
+
+      - name: Check out the rendering script
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CHARTS_REPO }}
+          path: .charts-repo
+
+      - uses: azure/setup-helm@v4
+      - name: Install yq
+        run: sudo snap install yq
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # A tag is a label the receiving registry re-resolves; the digest is the artifact. If the
+      # tag does not resolve, the commit was never built and there is nothing to promote.
+      - name: Resolve the image digest
+        id: img
+        run: |
+          set -euo pipefail
+          ref="${REGISTRY}/${IMAGE_NAME}:${{ inputs.revision }}"
+          digest="$(docker buildx imagetools inspect "$ref" --format '{{ .Manifest.Digest }}')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "no digest for $ref" >&2; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "repository=${REGISTRY}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      # Both colours are rendered: which one is standby changes at every cutover, and deciding
+      # it is the DevOps team's call at apply time, not ours at release time.
+      - name: Render the production manifests
+        run: |
+          set -euo pipefail
+          for colour in blue green; do
+            CHART_DIR="$GITHUB_WORKSPACE/deploy" \
+              .charts-repo/scripts/render-prod-manifests.sh \
+                "$SERVICE" "$colour" "${{ steps.img.outputs.digest }}" "out/$colour"
+          done
+
+      - name: Write the promotion record
+        run: |
+          set -euo pipefail
+          chart_name="$(yq -r '.dependencies[0].name'    deploy/Chart.lock)"
+          chart_ver="$(yq  -r '.dependencies[0].version' deploy/Chart.lock)"
+          chart_dig="$(yq  -r '.digest'                  deploy/Chart.lock)"
+          cat > promotion-record.txt <<REC
+          service          $SERVICE
+          release          ${{ inputs.version }}
+          git revision     ${{ inputs.revision }}
+          image            ${{ steps.img.outputs.repository }}
+          image digest     ${{ steps.img.outputs.digest }}
+          library chart    $chart_name $chart_ver
+          chart lock       $chart_dig
+          values-prod      sha256:$(sha256sum deploy/values-prod.yaml | cut -d' ' -f1)
+          values base      sha256:$(sha256sum deploy/values.yaml      | cut -d' ' -f1)
+          manifests        sha256:$(find out -type f | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
+          rendered by      ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          rendered at      $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          The image digest above is the artifact that was validated in test. Promote that digest:
+          if images are mirrored into another registry for the production cluster, the digest is
+          what proves the mirrored copy is the same bytes — the tag alone does not.
+          REC
+          sed -i 's/^          //' promotion-record.txt
+          cat promotion-record.txt
+
+      - name: Package
+        run: tar czf prod-manifests-${{ inputs.version }}.tar.gz out promotion-record.txt
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ inputs.version }}" \
+            --target "${{ inputs.revision }}" \
+            --title "$SERVICE ${{ inputs.version }}" \
+            --notes-file promotion-record.txt \
+            "prod-manifests-${{ inputs.version }}.tar.gz" \
+            promotion-record.txt

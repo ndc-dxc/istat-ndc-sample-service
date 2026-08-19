@@ -11,6 +11,9 @@ image:
   # Set by the pipeline: --set image.tag=<sha>. No default on purpose — deploying an
   # unspecified tag is exactly the mistake this chart should refuse to make.
   tag: ""
+  # Production pins by digest instead of tag — see values-prod.yaml and, for why,
+  # istat-ndc-cicd/docs/cross-cluster.md. When set, it wins over tag.
+  digest: ""
   pullPolicy: IfNotPresent
   pullSecrets: []
 

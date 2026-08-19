@@ -2,6 +2,21 @@
 #
 # `color` is set by the release pipeline (--set color=blue|green), not committed here: the
 # colour that is standby changes at every cutover.
+#
+# Production runs on a *different cluster*, operated by the ISTAT DevOps team: we own this
+# descriptor, they own the promotion and the apply (istat-ndc-cicd/docs/cross-cluster.md).
+# That is why the image block is restated here instead of being inherited from values.yaml —
+# "where does production pull from, and exactly which bytes" must be visible in the file that
+# describes production, not implicit two files away.
+image:
+  # Override if images are mirrored into a registry reachable from the production cluster.
+  # Run `verify-target.sh --role prod` against that cluster to find out which case applies.
+  repository: ghcr.io/ndc-dxc/istat-ndc-sample-service
+  # Set at release time: --set image.digest=sha256:… — the digest that test validated.
+  # A tag would be a label re-resolved by whichever registry serves the prod cluster; the
+  # digest is the artifact itself, so promotion is verifiable rather than trusted.
+  digest: ""
+
 replicaCount: 2
 
 podDisruptionBudget:
