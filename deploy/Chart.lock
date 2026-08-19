@@ -1,6 +1,6 @@
 dependencies:
 - name: istat-ndc-service
   repository: oci://ghcr.io/ndc-dxc/charts
-  version: 0.1.0
-digest: sha256:caa3ea474af1dacd6685bca42d7a4356d0bdc290f9c4807aeba9dc1e695f0556
-generated: "2026-08-19T12:43:39.735292369+02:00"
+  version: 0.2.0
+digest: sha256:06ead3b05186ce9104e007c65a1dc712926ea54b19a56962e4def9e178e4a2ed
+generated: "2026-08-19T14:12:10.010586452+02:00"
