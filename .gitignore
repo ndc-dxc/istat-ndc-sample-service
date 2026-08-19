@@ -1,0 +1,3 @@
+target/
+deploy/charts/
+deploy/Chart.lock

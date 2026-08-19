@@ -1,0 +1,10 @@
+# test — same shape as production, one replica less.
+replicaCount: 2
+
+config:
+  LOG_LEVEL: INFO
+  ENVIRONMENT: test
+
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits:   { cpu: 500m, memory: 512Mi }

@@ -1,0 +1,72 @@
+name: build
+
+# Builds the image and, when a deploy endpoint is configured, asks the cluster to roll it out.
+# This workflow never deploys by itself: it produces an immutable artifact and hands the tag
+# over. What happens with that tag is decided by the delivery pipeline.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      imageTag: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The commit SHA is the only tag: an image that can be overwritten is an image nobody can
+      # roll back to with confidence.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  request-deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # Skipped unless the cluster is reachable from GitHub. With the other trigger variant this
+    # job is replaced by one that calls the cluster API directly.
+    if: vars.DEPLOY_WEBHOOK_URL != ''
+    steps:
+      - name: Ask the delivery pipeline to deploy to dev
+        env:
+          WEBHOOK_URL: ${{ vars.DEPLOY_WEBHOOK_URL }}
+          WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          body=$(jq -nc \
+            --arg service "sample-service" \
+            --arg env "dev" \
+            --arg tag "${{ needs.build.outputs.imageTag }}" \
+            --arg url "${{ github.server_url }}/${{ github.repository }}" \
+            --arg rev "${{ github.sha }}" \
+            '{action:"deploy",client_payload:{service:$service,env:$env,imageTag:$tag,gitUrl:$url,gitRevision:$rev}}')
+
+          sig="sha256=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | awk '{print $2}')"
+
+          curl -sS --fail-with-body -X POST "$WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -H 'X-GitHub-Event: repository_dispatch' \
+            -H "X-Hub-Signature-256: $sig" \
+            -d "$body"

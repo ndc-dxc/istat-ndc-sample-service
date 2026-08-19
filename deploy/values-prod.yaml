@@ -1,0 +1,23 @@
+# prod — blue/green compatible.
+#
+# `color` is set by the release pipeline (--set color=blue|green), not committed here: the
+# colour that is standby changes at every cutover.
+replicaCount: 2
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 75
+
+config:
+  LOG_LEVEL: WARN
+  ENVIRONMENT: prod
+
+resources:
+  requests: { cpu: 250m, memory: 512Mi }
+  limits:   { cpu: "1",  memory: 1Gi }

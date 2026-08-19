@@ -1,0 +1,10 @@
+# dev — smallest footprint, generated route host, verbose logging.
+replicaCount: 1
+
+config:
+  LOG_LEVEL: DEBUG
+  ENVIRONMENT: dev
+
+resources:
+  requests: { cpu: 50m,  memory: 128Mi }
+  limits:   { cpu: 250m, memory: 256Mi }

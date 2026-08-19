@@ -1,0 +1,10 @@
+apiVersion: v2
+name: sample-service
+description: Deployment configuration for sample-service, one values file per environment.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  - name: istat-ndc-service
+    version: 0.1.0
+    repository: oci://ghcr.io/ndc-dxc/charts

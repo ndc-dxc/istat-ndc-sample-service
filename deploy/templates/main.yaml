@@ -1,0 +1,2 @@
+{{/* The only template a service chart needs. Everything else comes from values. */}}
+{{- include "istat-ndc-service.all" . }}

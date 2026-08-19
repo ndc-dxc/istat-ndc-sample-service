@@ -1,0 +1,104 @@
+# Shared base. Per-environment files carry the deltas only.
+
+nameOverride: ""
+fullnameOverride: sample-service
+
+# Suffix and label used to run two parallel stacks; empty outside production.
+color: ""
+
+image:
+  repository: ghcr.io/ndc-dxc/istat-ndc-sample-service
+  # Set by the pipeline: --set image.tag=<sha>. No default on purpose — deploying an
+  # unspecified tag is exactly the mistake this chart should refuse to make.
+  tag: ""
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+replicaCount: 1
+revisionHistoryLimit: 3
+
+strategy:
+  type: RollingUpdate
+  maxSurge: 1
+  maxUnavailable: 0
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  annotations: {}
+
+route:
+  enabled: true
+  host: ""        # empty → OpenShift generates one from namespace + cluster domain
+  path: ""
+  tls:
+    enabled: true
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  annotations: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Non-sensitive configuration, rendered into a ConfigMap and injected with envFrom.
+config: {}
+
+# Literal environment variables.
+env: {}
+
+# Secret references. Names only — values live in Secrets managed by OPS.
+#   - name: DB_PASSWORD
+#     secret: sample-service-db
+#     key: password
+secretEnv: []
+
+extraEnvFrom: []
+
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 20
+    periodSeconds: 10
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  startup:
+    enabled: false
+    path: /health
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+# Only for the internal-mirror registry variant.
+imageStream:
+  enabled: false
+
+readOnlyRootFilesystem: false
+podAnnotations: {}
+podLabels: {}
+commonLabels: {}
+deploymentAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+extraVolumes: []
+extraVolumeMounts: []
